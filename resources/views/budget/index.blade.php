@@ -744,6 +744,44 @@
             gap: 12px;
             margin-bottom: 24px;
             flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .expense-filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+
+        .expense-filter-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .expense-filter-select {
+            padding: 10px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.2px;
+            min-width: 150px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .expense-filter-select:hover,
+        .expense-filter-select:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(1, 74, 173, 0.08);
         }
 
         .table-responsive {
@@ -1822,6 +1860,14 @@
                 <button onclick="showAddExpenseModal()" class="btn-primary">
                     <i class="fas fa-plus"></i> Tambah Pengeluaran
                 </button>
+                <div class="expense-filter-group">
+                    <label for="expenseFilter" class="expense-filter-label">Riwayat:</label>
+                    <select id="expenseFilter" class="expense-filter-select">
+                        <option value="month" selected>Bulan</option>
+                        <option value="week">Minggu</option>
+                        <option value="all">Semua Waktu</option>
+                    </select>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="expense-table">
@@ -2057,6 +2103,8 @@
         const today = new Date();
         const monthEndBoundary = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
         const expenseDateInput = document.getElementById('expenseDate');
+        const expenseFilterSelect = document.getElementById('expenseFilter');
+        let currentExpenseFilter = expenseFilterSelect ? expenseFilterSelect.value : 'month';
         if (expenseDateInput) {
             expenseDateInput.setAttribute('max', formatDateForInput(monthEndBoundary));
         }
@@ -2068,8 +2116,8 @@
             return selectedDate > monthEndBoundary;
         }
 
-        function getTotalExpenses() {
-            return expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        function getTotalExpenses(list = expenses) {
+            return list.reduce((sum, expense) => sum + expense.amount, 0);
         }
 
         function updateRemainingBudget() {
@@ -2501,15 +2549,67 @@
             });
         };
 
+        function getWeekStart(date) {
+            const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const day = result.getDay();
+            const diff = day === 0 ? -6 : 1 - day; // Monday as start of week
+            result.setDate(result.getDate() + diff);
+            result.setHours(0, 0, 0, 0);
+            return result;
+        }
+
+        function isSameWeek(dateA, dateB) {
+            const startA = getWeekStart(dateA);
+            const startB = getWeekStart(dateB);
+            return startA.getTime() === startB.getTime();
+        }
+
+        function isSameMonth(dateA, dateB) {
+            return dateA.getFullYear() === dateB.getFullYear()
+                && dateA.getMonth() === dateB.getMonth();
+        }
+
+        function filterExpenses(list, filter) {
+            if (!Array.isArray(list)) return [];
+            if (filter === 'all') return list;
+
+            return list.filter(expense => {
+                if (!expense.date) return false;
+                const expenseDate = new Date(expense.date);
+                if (isNaN(expenseDate.getTime())) return false;
+
+            if (filter === 'week') {
+                return isSameWeek(expenseDate, today);
+                }
+
+                // default: month
+                return isSameMonth(expenseDate, today);
+            });
+        }
+
+        if (expenseFilterSelect) {
+            expenseFilterSelect.addEventListener('change', function() {
+                currentExpenseFilter = this.value;
+                renderExpenses();
+            });
+        }
+
         function renderExpenses() {
             const tbody = document.getElementById('expenseTableBody');
-            if (expenses.length === 0) {
-                tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Belum ada pengeluaran yang dicatat. Klik "Tambah Pengeluaran" untuk mulai mencatat.</td></tr>';
+            const filteredExpenses = filterExpenses(expenses, currentExpenseFilter);
+
+            if (filteredExpenses.length === 0) {
+                const filterLabel = currentExpenseFilter === 'week'
+                    ? 'minggu ini'
+                    : currentExpenseFilter === 'month'
+                        ? 'bulan ini'
+                        : 'semua waktu';
+                tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Belum ada pengeluaran untuk ${filterLabel}. Klik "Tambah Pengeluaran" untuk mulai mencatat.</td></tr>`;
                 updateRemainingBudget();
                 return;
             }
             
-            tbody.innerHTML = expenses.map(expense => `
+            tbody.innerHTML = filteredExpenses.map(expense => `
                 <tr>
                     <td data-label="Tanggal">${new Date(expense.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
                     <td data-label="Kategori"><span class="badge-category" data-category="${expense.category}">${expense.category}</span></td>
